@@ -117,6 +117,8 @@ zeek_env:
   extracted_file_http_server_enable: true
   extracted_file_http_server_encrypt: true
   extracted_file_preservation: quarantined
+  extracted_file_max_bytes: 134217728
+  extracted_file_min_bytes: 64
 
 
 pcap_live:
@@ -134,6 +136,8 @@ pcap_capture_env:
   # NOTE Net Sniff and tcpdump cannot be both true. Only one or the other can be running at a time.
   net_sniff: false
   tcpdump: true
+  pcap_rotate_megabytes: 4096
+  pcap_rotate_minutes: 10
 
 
 # Shared settings across all live capture type things (IE: Zeek live, Suricata live, and Pcap capture)
@@ -152,6 +156,11 @@ live_capture:
 
 # Filebeat capture
 filebeat:
+  filebeat_clean_inactive: 180m  
+  filebeat_close_inactive: 120s
+  filebeat_close_inactive_live: 90m
+  filebeat_ignore_older: 120m
+  filebeat_scan_frequency: 10s
 
 # Default affinity ensures that the filebeat Daemonset is applied with anything that also has suricata or zeek live capture running on it.
   nodeAffinity:
