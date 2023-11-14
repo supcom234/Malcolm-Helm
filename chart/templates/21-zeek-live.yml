@@ -17,10 +17,6 @@ apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: zeek-live-daemonset
-  labels:
-    app.kubernetes.io/managed-by: Helm
-  annotations:    
-    meta.helm.sh/release-namespace: malcolm
 spec:
   selector:
     matchLabels:
