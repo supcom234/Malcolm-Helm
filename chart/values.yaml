@@ -138,6 +138,7 @@ pcap_capture_env:
   tcpdump: true
   pcap_rotate_megabytes: 4096
   pcap_rotate_minutes: 10
+  home_net: "[192.168.0.0/16,10.0.0.0/8,172.16.0.0/12]"
 
 
 # Shared settings across all live capture type things (IE: Zeek live, Suricata live, and Pcap capture)
