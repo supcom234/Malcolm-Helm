@@ -117,8 +117,8 @@ zeek_env:
   extracted_file_http_server_enable: true
   extracted_file_http_server_encrypt: true
   extracted_file_preservation: quarantined
-  extracted_file_max_bytes: 134217728
-  extracted_file_min_bytes: 64
+  extracted_file_max_bytes: "134217728"
+  extracted_file_min_bytes: "64"
 
 
 pcap_live:
