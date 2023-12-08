@@ -37,6 +37,20 @@ config.json: |-
     "sharedFileSystemPath": "/opt/local-path-provisioner"
   }
 
+
+## Vagrant Quickstart
+
+It is required that you have 500GB of free space and to have at least 8 GB of free RAM as well as 8 extra CPU cores to run this quickstart.
+
+1. Install virtual box version 7.0.10 r158379 or greater from https://www.virtualbox.org/wiki/Downloads
+2. Install vagrant version 2.4.0 or greater from https://developer.hashicorp.com/vagrant/downloads
+3. Install vagrant disk size plugin verion 0.1.3 with `vagrant plugin install vagrant-disksize`
+4. Install vagrant reload version 0.0.1 with `vagrant plugin install vagrant-reload`
+5. Run `cd <root of the project where the Vagrantfile is located>`
+6. Run `vagrant up`
+7. Wait until everything installs at the end of the install you should see the IP show up saying you can ssh in.
+8. run `ssh vagrant@<ip outputed from installation>` and login using vagrant as the password.
+
 ## External Elasticsearch notes
 
 Elasticsearch requires TLS termination in order for it to support Single Sign On (SSO) functionality.  The values file was updated to give 

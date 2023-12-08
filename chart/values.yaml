@@ -28,7 +28,7 @@ opensearch:
   url: http://opensearch:9200
   dashboards_url: http://dashboards:5601/dashboards
   development:
-    java_memory: -Xms16g -Xmx16g -Xss256k -XX
+    java_memory: -Xms4g -Xmx4g -Xss256k -XX
   production:
     java_memory: -Xms32g -Xmx32g -Xss256k -XX
   
@@ -61,7 +61,7 @@ external_elasticsearch:
 logstash:
   # Note the number of logstash instances will be based on the number of nodes in your kubernetes cluster.
   development:
-    java_memory: -Xms3g -Xmx3g -Xss1536k -XX  
+    java_memory: -Xms1g -Xmx1g -Xss1536k -XX  
     replicas: 1
     #See https://www.elastic.co/guide/en/logstash/current/tuning-logstash.html for details on these parameters.
     workers: 6
@@ -108,12 +108,12 @@ storage:
 ingress:
   # Enable this if deploying in RKE2 environment with the default nginx ingress controller
   # TODO this still needs to be tested with tls enabled with auto cert generation
-  enabled: false
+  enabled: true
 
 istio:
   # Enable this if deploying in Kuberenetes environment leveraging istio service mesh
   # Additionally, it is recommended to turn off tls everywhere when this is set to true and let tls handle all things tls :).
-  enabled: true
+  enabled: false
   gateway: istio-system/tenant
   virtualservicename: malcolm
   domain: vp.bigbang.dev
@@ -182,7 +182,7 @@ upload_common_env:
 # Affects all zeek deployment live and offline
 zeek_env:
   #Set to none, all or interesting.
-  extract_mode: interesting
+  extract_mode: all
   extracted_file_enable_capa: true
   extracted_file_enable_clamav: true
   extracted_file_enable_yara: true
@@ -203,7 +203,7 @@ pcap_live:
 # Sets environment variables across multiple applications within Malcolm (IE: pcap capture, zeek and suricata)
 # pcap_iface can be comma separate values.
 pcap_capture_env:
-  pcap_iface: ens192
+  pcap_iface: enp0s8
   pcap_filter: ""
   # NOTE Net Sniff and tcpdump cannot be both true. Only one or the other can be running at a time.
   net_sniff: false
