@@ -17,11 +17,11 @@ image:
   tag: ""
 
 auth:
-  username: ubuntu
+  username: vagrant
   # Generated with the openssl passwd -1 <your password>
-  openssl_password: "$1$8UNOU5uL$2dWuIv98M6u3HcQWZKA/r1"
+  openssl_password: "$1$9akV05vU$JHFoK3C2dDquTFAMoz14x/"
   # Generated with  htpasswd -bnB <your username> <your password>
-  htpass_cred: "ubuntu:$2y$05$OihKMwCAuOYj6vKGpemeVeHAoup60XOcVzFqKCQ.OHqKmRNZMp0Qy"
+  htpass_cred: "vagrant:$2y$05$kaHZ2j2VDDQCBf9bEk1gMuJAPRs4q4rolPRbq3zXUb7j2JyGuc50a"
 
 opensearch:
   enabled: true

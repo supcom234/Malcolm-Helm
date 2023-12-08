@@ -23,5 +23,5 @@ spec:
       protocol: HTTPS
     tls:
       credentialName: tenant-cert
-      minProtocolVersion: TLSV1_3
+      # minProtocolVersion: TLSV1_3
       mode: SIMPLE

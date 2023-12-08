@@ -8,10 +8,9 @@ Vagrant.configure("2") do |config|
   config.disksize.size = '500GB'
 
   # NIC 1: Static IP with port forwarding
-  # config.vm.network "private_network", type: "dhcp"
-  # config.vm.network "private_network", type: "static", ip: "192.168.33.10"
   if script_choice == 'use_istio'
-    config.vm.network "forwarded_port", guest: 443, host: 8443
+    config.vm.network "forwarded_port", guest: 443, host: 8443, guest_ip: "10.0.2.100"
+    # config.vm.network "forwarded_port", guest: 8080, host: 8080, guest_ip: "10.0.2.100"
   else
     config.vm.network "forwarded_port", guest: 80, host: 8080
   end
@@ -59,6 +58,8 @@ Vagrant.configure("2") do |config|
     snap install helm --classic
     node_name=$(kubectl get nodes -o jsonpath="{.items[0].metadata.name}")
     kubectl label nodes $node_name cnaps.io/node-type=Tier-1
+    kubectl label nodes $node_name cnaps.io/suricata-capture=true
+    kubectl label nodes $node_name cnaps.io/zeek-capture=true
 
     kubectl apply -f /vagrant/vagrant_dependencies/sc.yaml
 
@@ -69,6 +70,13 @@ Vagrant.configure("2") do |config|
     grep -qxF 'fs.file-max=1000000' /etc/sysctl.conf || echo 'fs.file-max=1000000' >> /etc/sysctl.conf
     grep -qxF 'vm.max_map_count=1524288' /etc/sysctl.conf || echo 'vm.max_map_count=1524288' >> /etc/sysctl.conf
     sysctl -p
+
+    # Add kernel modules needed for istio 
+    grep -qxF 'xt_REDIRECT' /etc/modules || echo 'xt_REDIRECT' >> /etc/modules
+    grep -qxF 'xt_connmark' /etc/modules || echo 'xt_connmark' >> /etc/modules
+    grep -qxF 'xt_mark' /etc/modules || echo 'xt_mark' >> /etc/modules
+    grep -qxF 'xt_owner' /etc/modules || echo 'xt_owner' >> /etc/modules
+    grep -qxF 'iptable_mangle' /etc/modules || echo 'iptable_mangle' >> /etc/modules
 
   SHELL
 
@@ -96,6 +104,7 @@ Vagrant.configure("2") do |config|
       helm install istio istio/base --version 1.18.2 -n istio-system --create-namespace
       helm install istiod istio/istiod --version 1.18.2 -n istio-system --wait
       helm install tenant-ingressgateway istio/gateway --version 1.18.2 -n istio-system
+      kubectl apply -f /vagrant/vagrant_dependencies/tenant-gateway.yaml      
 
       # Create the certs
       mkdir certs
@@ -108,26 +117,20 @@ Vagrant.configure("2") do |config|
       cat certs/ca.crt >> certs/chain.crt
 
       # openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout certs/istio.key -out certs/istio.crt -config /vagrant/vagrant_dependencies/req.conf -extensions 'v3_req'
-      # Setup istio gateway with certs
-      # sleep 30
+      # Setup istio gateway with certs      
       # kubectl create -n istio-system secret tls tenant-cert --key=certs/istio.key --cert=certs/istio.crt
-      kubectl create -n istio-system secret tls tenant-cert --key=certs/bigbang.vp.dev.key --cert=certs/chain.crt
-      kubectl apply -f /vagrant/vagrant_dependencies/tenant-gateway.yaml
+      kubectl create -n istio-system secret tls tenant-cert --key=certs/bigbang.vp.dev.key --cert=certs/chain.crt      
 
       # Install Malcolm enabling istio
       helm install malcolm /vagrant/chart -n malcolm --create-namespace --set istio.enabled=true --set ingress.enabled=false --set pcap_capture_env.pcap_iface=enp0s8
-
+      # kubectl apply -f /vagrant/vagrant_dependencies/test-gateway.yml
+      grep -qxF '10.0.2.100 malcolm.vp.bigbang.dev malcolm.test.dev' /etc/hosts || echo '10.0.2.100 malcolm.vp.bigbang.dev malcolm.test.dev' >> /etc/hosts
       echo "You may now ssh to your kubernetes cluster using ssh -p 2222 vagrant@localhost"
       hostname -I
     SHELL
   else        
     config.vm.provision "shell", inline: <<-SHELL
-      helm install malcolm /vagrant/chart -n malcolm \\
-      --create-namespace \\
-      --set istio.enabled=false \\
-      --set ingress.enabled=true \\
-      --set pcap_capture_env.pcap_iface=enp0s8
-
+      helm install malcolm /vagrant/chart -n malcolm --create-namespace --set istio.enabled=false --set ingress.enabled=true --set pcap_capture_env.pcap_iface=enp0s8
       echo "You may now ssh to your kubernetes cluster using ssh -p 2222 vagrant@localhost"
       hostname -I
     SHELL
