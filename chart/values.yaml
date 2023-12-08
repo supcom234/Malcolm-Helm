@@ -107,13 +107,12 @@ storage:
 
 ingress:
   # Enable this if deploying in RKE2 environment with the default nginx ingress controller
-  # TODO this still needs to be tested with tls enabled with auto cert generation
-  enabled: true
+  enabled: false
 
 istio:
   # Enable this if deploying in Kuberenetes environment leveraging istio service mesh
   # Additionally, it is recommended to turn off tls everywhere when this is set to true and let tls handle all things tls :).
-  enabled: false
+  enabled: true
   gateway: istio-system/tenant
   virtualservicename: malcolm
   domain: vp.bigbang.dev
@@ -203,7 +202,7 @@ pcap_live:
 # Sets environment variables across multiple applications within Malcolm (IE: pcap capture, zeek and suricata)
 # pcap_iface can be comma separate values.
 pcap_capture_env:
-  pcap_iface: enp0s8
+  pcap_iface: ens192
   pcap_filter: ""
   # NOTE Net Sniff and tcpdump cannot be both true. Only one or the other can be running at a time.
   net_sniff: false

@@ -1,60 +1,24 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
-# All Vagrant configuration is done below. The "2" in Vagrant.configure
-# configures the configuration version (we support older styles for
-# backwards compatibility). Please don't change it unless you know what
-# you're doing.
 Vagrant.require_version ">= 2.3.7"
 Vagrant.configure("2") do |config|
-  # The most common configuration options are documented and commented below.
-  # For a complete reference, please see the online documentation at
-  # https://docs.vagrantup.com.
-
-  # Every Vagrant development environment requires a box. You can search for
-  # boxes at https://vagrantcloud.com/search.
+  script_choice = ENV['VAGRANT_SETUP_CHOICE'] || 'none'
   config.vm.box = "ubuntu/jammy64"
   config.disksize.size = '500GB'
 
-  # Disable automatic box update checking. If you disable this, then
-  # boxes will only be checked for updates when the user runs
-  # `vagrant box outdated`. This is not recommended.
-  # config.vm.box_check_update = false
+  # NIC 1: Static IP with port forwarding
+  # config.vm.network "private_network", type: "dhcp"
+  # config.vm.network "private_network", type: "static", ip: "192.168.33.10"
+  if script_choice == 'use_istio'
+    config.vm.network "forwarded_port", guest: 443, host: 8443
+  else
+    config.vm.network "forwarded_port", guest: 80, host: 8080
+  end
 
-  # Create a forwarded port mapping which allows access to a specific port
-  # within the machine from a port on the host machine. In the example below,
-  # accessing "localhost:8080" will access port 80 on the guest machine.
-  # NOTE: This will enable public access to the opened port
-  # config.vm.network "forwarded_port", guest: 80, host: 8080
-
-  # Create a forwarded port mapping which allows access to a specific port
-  # within the machine from a port on the host machine and only allow access
-  # via 127.0.0.1 to disable public access
-  # config.vm.network "forwarded_port", guest: 80, host: 8080, host_ip: "127.0.0.1"
-
-  # Create a private network, which allows host-only access to the machine
-  # using a specific IP.
-  # config.vm.network "private_network", ip: "192.168.33.10"
-
-  # Create a public network, which generally matched to bridged network.
-  # Bridged networks make the machine appear as another physical device on
-  # your network.
-  config.vm.network "public_network"
-
-  # Extra NIC for listening off of
-  # config.vm.network "private_network", type: "dhcp", auto_config: false, virtualbox__intnet: "promiscuous"
-
-  # Disable the default share of the current code directory. Doing this
-  # provides improved isolation between the vagrant box and your host
-  # by making sure your Vagrantfile isn't accessable to the vagrant box.
-  # If you use this you may want to enable additional shared subfolders as
-  # shown above.
-  # config.vm.synced_folder ".", "/vagrant", disabled: true
-
-  # Provider-specific configuration so you can fine-tune various
-  # backing providers for Vagrant. These expose provider-specific options.
-  # Example for VirtualBox:
-  #
+  # NIC 2: Promiscuous mode
+  config.vm.network "private_network", type: "dhcp", virtualbox__intnet: "promiscuous", auto_config: false
+  
   config.vm.provider "virtualbox" do |vb|
     vb.gui = true
     # Customize the amount of memory on the VM:
@@ -62,20 +26,17 @@ Vagrant.configure("2") do |config|
     vb.memory = "16192"
     vb.cpus = 8
   end
-  #
-  # View the documentation for the provider you are using for more
-  # information on available options.
 
-  # Enable provisioning with a shell script. Additional provisioners such as
-  # Ansible, Chef, Docker, Puppet and Salt are also available. Please see the
-  # documentation for more information about their specific syntax and use.
   config.vm.provision "shell", inline: <<-SHELL
     apt-get update
     apt-get upgrade -y
 
     # Turn off password authentication to make it easier to login
     sudo sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
-    sudo systemctl restart sshd
+
+    # Configure promisc iface
+    cp /vagrant/vagrant_dependencies/set-promisc.service /etc/systemd/system/set-promisc.service
+    systemctl enable set-promisc.service
 
     # Setup RKE2
     curl -sfL https://get.rke2.io | sudo INSTALL_RKE2_VERSION=v1.26.6+rke2r1 sh -
@@ -103,22 +64,73 @@ Vagrant.configure("2") do |config|
 
     grep -qxF 'alias k="kubectl"' /home/vagrant/.bashrc || echo 'alias k="kubectl"' >> /home/vagrant/.bashrc
 
-    # Load specific settings 
+    # Load specific settings sysctl settings needed for opensearch
     grep -qxF 'fs.inotify.max_user_instances=8192' /etc/sysctl.conf || echo 'fs.inotify.max_user_instances=8192' >> /etc/sysctl.conf
     grep -qxF 'fs.file-max=1000000' /etc/sysctl.conf || echo 'fs.file-max=1000000' >> /etc/sysctl.conf
     grep -qxF 'vm.max_map_count=1524288' /etc/sysctl.conf || echo 'vm.max_map_count=1524288' >> /etc/sysctl.conf
     sysctl -p
-    swapoff -a    
-    reboot
+
   SHELL
 
   config.vm.provision "reload"
 
-  config.vm.provision "shell", inline: <<-SHELL
-    touch /home/ubuntu/test123.txt
-    helm install malcolm /vagrant/chart -n malcolm --create-namespace
-    echo "You may now ssh using ssh vagrant@<hostIp>"
-    hostname -I
-  SHELL
+  if script_choice == 'use_istio'
+    config.vm.provision "shell", inline: <<-SHELL
+      # Setup metallb
+      helm repo add metallb https://metallb.github.io/metallb
+      helm repo update metallb
+      helm install metallb metallb/metallb -n metallb-system --create-namespace
+      echo "Sleep for two minutes for cluster to come back up"
+      sleep 120
+      kubectl wait --for=condition=ready pod -l app.kubernetes.io/component=controller --timeout=900s --namespace metallb-system
+      kubectl apply -f /vagrant/vagrant_dependencies/ipaddress-pool.yml
+      kubectl apply -f /vagrant/vagrant_dependencies/l2advertisement.yaml
+
+      # Delete rke ingress controller so it does not conflict with istio service mesh
+      kubectl delete daemonset rke2-ingress-nginx-controller -n kube-system
+
+      # Install istio service mesh
+      helm repo add istio https://istio-release.storage.googleapis.com/charts
+      helm repo update istio
+
+      helm install istio istio/base --version 1.18.2 -n istio-system --create-namespace
+      helm install istiod istio/istiod --version 1.18.2 -n istio-system --wait
+      helm install tenant-ingressgateway istio/gateway --version 1.18.2 -n istio-system
+
+      # Create the certs
+      mkdir certs
+
+      openssl req -x509 -sha256 -nodes -days 365 -newkey rsa:2048 -subj '/O=bigbang Inc./CN=bigbang.vp.dev' -keyout certs/ca.key -out certs/ca.crt
+      openssl req -out certs/bigbang.vp.dev.csr -newkey rsa:2048 -nodes -keyout certs/bigbang.vp.dev.key -config /vagrant/vagrant_dependencies/req.conf -extensions 'v3_req'
+      openssl x509 -req -sha256 -days 365 -CA certs/ca.crt -CAkey certs/ca.key -set_serial 0 -in certs/bigbang.vp.dev.csr -out certs/bigbang.vp.dev.crt
+
+      cat certs/bigbang.vp.dev.crt > certs/chain.crt
+      cat certs/ca.crt >> certs/chain.crt
+
+      # openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout certs/istio.key -out certs/istio.crt -config /vagrant/vagrant_dependencies/req.conf -extensions 'v3_req'
+      # Setup istio gateway with certs
+      # sleep 30
+      # kubectl create -n istio-system secret tls tenant-cert --key=certs/istio.key --cert=certs/istio.crt
+      kubectl create -n istio-system secret tls tenant-cert --key=certs/bigbang.vp.dev.key --cert=certs/chain.crt
+      kubectl apply -f /vagrant/vagrant_dependencies/tenant-gateway.yaml
+
+      # Install Malcolm enabling istio
+      helm install malcolm /vagrant/chart -n malcolm --create-namespace --set istio.enabled=true --set ingress.enabled=false --set pcap_capture_env.pcap_iface=enp0s8
+
+      echo "You may now ssh to your kubernetes cluster using ssh -p 2222 vagrant@localhost"
+      hostname -I
+    SHELL
+  else        
+    config.vm.provision "shell", inline: <<-SHELL
+      helm install malcolm /vagrant/chart -n malcolm \\
+      --create-namespace \\
+      --set istio.enabled=false \\
+      --set ingress.enabled=true \\
+      --set pcap_capture_env.pcap_iface=enp0s8
+
+      echo "You may now ssh to your kubernetes cluster using ssh -p 2222 vagrant@localhost"
+      hostname -I
+    SHELL
+  end
 
 end
